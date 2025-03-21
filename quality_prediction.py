@@ -1,8 +1,5 @@
 import tensorflow as tf
 import numpy as np
-from PIL import Image
-import os
-import io
 
 # Constants for apple quality prediction
 APPLE_CATEGORIES = ['Blotch_Apple', 'Normal_Apple', 'Rot_Apple', 'Scab_Apple']
