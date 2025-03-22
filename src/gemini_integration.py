@@ -2,13 +2,24 @@ import google.generativeai as genai
 import json
 import os
 import datetime
+from dotenv import load_dotenv
 
-# Configure the Gemini API with the provided key
-GEMINI_API_KEY = "AIzaGIQdGwLPSHxRHZ0IcmEGHdBa0j64DgQ"
-genai.configure(api_key=GEMINI_API_KEY)
+# Load environment variables
+load_dotenv()
 
-# Create a Gemini model for text generation
-model = genai.GenerativeModel('gemini-pro')
+# Configure the Gemini API with the key from environment
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+if not GEMINI_API_KEY:
+    print("Warning: Gemini API key not found in environment. Some AI features may not work.")
+    
+try:
+    genai.configure(api_key=GEMINI_API_KEY)
+    # Create a Gemini model for text generation
+    model = genai.GenerativeModel('gemini-pro')
+    print("Gemini API configured successfully")
+except Exception as e:
+    print(f"Error configuring Gemini API: {e}")
+    model = None
 
 # Common insights about apple diseases that can be used in responses
 COMMON_INSIGHTS = {
@@ -112,7 +123,17 @@ HINDI_TRANSLATIONS = {
     "Chat with Harvest Assistant": "फसल सहायक से चैट करें",
     "Ask a question...": "एक सवाल पूछें...",
     "Thinking...": "सोच रहा हूँ...",
-    "Refresh Data": "डेटा रिफ्रेश करें"
+    "Refresh Data": "डेटा रिफ्रेश करें",
+    
+    # Apple quality chatbot specific translations
+    "Apple Quality Assistant": "सेब गुणवत्ता सहायक",
+    "How can I help with your apples today?": "आज मैं आपके सेबों के बारे में कैसे मदद कर सकता हूं?",
+    "Ask about apple storage, quality, or rot prevention": "सेब के भंडारण, गुणवत्ता, या सड़न रोकथाम के बारे में पूछें",
+    "Early signs of rot include": "सड़न के प्रारंभिक संकेतों में शामिल हैं",
+    "Store apples in cool, dry places": "सेब को ठंडी, सूखी जगहों पर स्टोर करें",
+    "Handle apples gently to prevent bruising": "सेब को धीरे से संभालें ताकि चोट न लगे",
+    "The system uses computer vision to detect": "सिस्टम कंप्यूटर विज़न का उपयोग करके पता लगाता है",
+    "You should remove apples with soft spots immediately": "आपको नरम धब्बे वाले सेब तुरंत हटा देने चाहिए"
 }
 
 def analyze_harvest_data(data):
