@@ -1,115 +1,110 @@
-# Apple Harvest Management System with Google Cloud Integration
+# Apple Harvest Management System
 
-This system detects apples using computer vision, predicts their quality, uploads the data to Google Cloud Storage, and displays harvest analytics in a Streamlit dashboard.
+A comprehensive dashboard for monitoring apple harvest quality and disease detection.
 
 ## Features
 
-### Detection (detection.py)
-- Real-time apple detection using YOLOv5
-- Cropping and saving of detected apples
-- Object tracking to avoid duplicate detections
-- Automatic upload to Google Cloud Storage
-- JSON data export with metadata
+- Real-time apple quality analysis using machine learning
+- Disease detection on apple fruit images
+- Leaf disease analysis capabilities
+- Harvest statistics and reporting
+- Integration with Google Cloud Storage for image management
 
-### Quality Prediction
-- Apple quality classification using TensorFlow model
-- Categories: Good, Mixed, Bad quality
-- Confidence scores for each quality category
-- Integration with detection results
+## Setup Instructions
 
-### Harvest Dashboard (app.py)
-- Comprehensive harvest data visualization
-- Quality distribution analytics
-- Filtering and sorting of detected apples
-- Quality-based recommendations for farmers
-- Timeline visualization of harvest process
-- Interactive charts and visualizations
+### Prerequisites
 
-## Setup
+- Python 3.9+
+- Google Cloud account with Storage access
+- Service account with appropriate permissions
 
-1. Install dependencies:
+### Installation
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/YourUsername/apple-detection.git
+   cd apple-detection
+   ```
+
+2. Install dependencies:
    ```
    pip install -r requirements.txt
    ```
 
-2. Ensure your Google Cloud credentials are in the correct location:
-   ```
-   src/google_credentials.json
-   ```
+3. Set up Google Cloud credentials:
+   - Create a service account in Google Cloud Console
+   - Grant it the necessary permissions (Storage Object Viewer at minimum)
+   - Download the JSON credentials file
+   - Rename it to `google_credentials.json` and place it in the `src/` directory
+   - ⚠️ Do not commit this file to version control!
 
-3. Make sure you have a webcam connected to your computer.
+4. Configure the application:
+   - Set the `BUCKET_NAME` environment variable to your GCS bucket name
+   - Or update it in the Dockerfile
 
-4. Place the apple quality model in the project root:
-   ```
-   apple_quality_model.h5
-   ```
+### Local Development
 
-## Running the System
-
-### Step 1: Start the Apple Detection
-
-Run the detection script to start capturing and processing video from your webcam:
-
+Run the application locally:
 ```
-python detection.py
+streamlit run src/app.py
 ```
 
-This will:
-- Start your webcam
-- Detect apples in the video feed
-- Save cropped images of detected apples locally
-- Upload images to Google Cloud Storage
-- Display detection results in real-time
+### Deployment to Google Cloud Run
 
-Press 'q' to exit the detection process.
+1. Make sure you have the [Google Cloud SDK](https://cloud.google.com/sdk/docs/install) installed and configured.
 
-### Step 2: View the Harvest Dashboard
+2. Deploy using the provided script:
+   ```
+   chmod +x deploy.sh
+   ./deploy.sh
+   ```
 
-After running the detection, start the Streamlit dashboard:
+3. Or deploy manually:
+   ```
+   gcloud run deploy apple-harvest-app \
+     --source . \
+     --region us-central1 \
+     --allow-unauthenticated
+   ```
+
+## Machine Learning Models
+
+This application uses two main TensorFlow models:
+
+1. `apple_quality_model.h5` - For detecting apple diseases and quality
+2. `leaf_model.h5` - For analyzing leaf diseases
+
+The models should be placed in the `src/models/` directory before deployment.
+
+## Directory Structure
 
 ```
-streamlit run app.py
+.
+├── Dockerfile                 # Container configuration
+├── README.md                  # This file
+├── cloudbuild.yaml            # Cloud Build configuration
+├── deploy.sh                  # Deployment script
+├── requirements.txt           # Python dependencies
+└── src/
+    ├── app.py                 # Main Streamlit application
+    ├── google_credentials_sample.json  # Sample credentials (for reference)
+    ├── leaf_disease_prediction.py  # Leaf disease prediction module
+    ├── models/                # ML models directory
+    │   ├── apple_quality_model.h5
+    │   └── leaf_model.h5
+    └── quality_prediction.py  # Apple quality prediction module
 ```
 
-This will open a web browser with the dashboard where you can:
-- View harvest summary metrics and quality distribution
-- Analyze the quality of detected apples
-- Filter apples by quality categories
-- Get harvest recommendations based on quality analysis
-- View raw detection and quality data
+## Security Considerations
 
-## Google Cloud Integration
-
-The system uses Google Cloud Storage to:
-- Store cropped apple images
-- Save session data in JSON format
-- Enable dashboard visualization from any device
-- Provide persistent storage of detection results
-
-## Quality Model
-
-The system uses a TensorFlow model (`apple_quality_model.h5`) to predict apple quality with three categories:
-- **Good**: High-quality apples suitable for direct retail
-- **Mixed**: Medium-quality apples that may require sorting
-- **Bad**: Low-quality apples that may need processing or disposal
-
-If the model file is not available, a placeholder model will be created for demonstration purposes.
-
-## Troubleshooting
-
-- If you encounter errors with Google Cloud authentication, make sure:
-  - Your credentials file is correctly located
-  - The service account has the necessary permissions
-  - The bucket name is correct and accessible
-
-- If the webcam doesn't start, check:
-  - Your webcam is properly connected
-  - You have the necessary permissions to access the webcam
-  - No other application is using the webcam
+- Never commit your Google Cloud credentials to version control
+- The provided credential sample is for reference only
+- Use environment variables when possible
+- Follow the principle of least privilege for service accounts
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+[MIT License](LICENSE)
 
 ---
 
