@@ -1,0 +1,47 @@
+# .gcloudignore
+# Exclude files from deployment
+
+# Python bytecode files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+sdist/
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environments
+.env
+
+# Git
+.git
+.gitignore
+
+# Local development
+.idea/
+.vscode/
+
+# DO NOT EXCLUDE model files
+!src/models/
+!src/models/leaf_model.h5
+!src/models/apple_quality_model.h5 

@@ -1,16 +1,15 @@
 import streamlit as st
 import os
 import json
-import cv2
 import numpy as np
 from google.cloud import storage
 from datetime import datetime
 import io
-import tempfile
 import matplotlib.pyplot as plt
 import pandas as pd
 from PIL import Image
 import quality_prediction
+import leaf_disease_prediction
 import altair as alt
 import gemini_integration
 
@@ -22,25 +21,28 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Initialize session state for language and chat
+# Initialize session state for analysis data
 if 'language' not in st.session_state:
     st.session_state.language = 'english'
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
 if 'analysis_cache' not in st.session_state:
     st.session_state.analysis_cache = {}
+# Add state for leaf disease analysis
+if 'leaf_image' not in st.session_state:
+    st.session_state.leaf_image = None
+if 'leaf_prediction' not in st.session_state:
+    st.session_state.leaf_prediction = None
+if 'leaf_uploaded' not in st.session_state:
+    st.session_state.leaf_uploaded = False
 
-# Function to get translated text
+# Function to get translated text - simplified to remove translations
 def get_text(key):
-    if st.session_state.language.lower() == 'hindi':
-        return gemini_integration.HINDI_TRANSLATIONS.get(key, key)
     return key
 
-# Set Google Cloud credentials
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "src/google_credentials.json"
+# Set Google Cloud credentials to use the absolute path
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "/etc/google/auth/credentials.json"
 
 # Google Cloud Storage configuration
-BUCKET_NAME = "apple-detection-images"
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "apple-454418-detection-images")
 
 # Initialize Google Cloud Storage client
 storage_client = storage.Client()
@@ -158,18 +160,6 @@ def get_quality_color(category):
     else:  # Rot_Apple
         return "red"
 
-# Sidebar - Language selector
-language_col1, language_col2 = st.sidebar.columns(2)
-with language_col1:
-    if st.session_state.language == 'english':
-        if st.button("हिंदी में बदलें"):
-            st.session_state.language = 'hindi'
-            st.experimental_rerun()
-with language_col2:
-    if st.session_state.language == 'hindi':
-        if st.button("Switch to English"):
-            st.session_state.language = 'english'
-            st.experimental_rerun()
 
 # Sidebar 
 st.sidebar.title("🍎 " + get_text("Apple Harvest Dashboard"))
@@ -255,6 +245,33 @@ analysis_data = {
     }
 }
 
+# Callback functions to prevent full reruns
+def process_leaf_image():
+    """Process the leaf image when uploaded and store results in session state"""
+    if st.session_state.leaf_upload_widget is not None:
+        # Store the image
+        image_data = st.session_state.leaf_upload_widget.getvalue()
+        leaf_image = Image.open(io.BytesIO(image_data))
+        st.session_state.leaf_image = leaf_image
+        
+        # Get predictor once and cache it
+        if 'leaf_predictor' not in st.session_state:
+            st.session_state.leaf_predictor = leaf_disease_prediction.get_predictor()
+        
+        # Analyze the image
+        try:
+            prediction = st.session_state.leaf_predictor.predict(leaf_image)
+            st.session_state.leaf_prediction = prediction
+            st.session_state.leaf_uploaded = True
+        except Exception as e:
+            st.session_state.leaf_prediction = {
+                "error": str(e),
+                "predicted_class": "unknown",
+                "confidence": 0.0,
+                "class_probabilities": {}
+            }
+            st.session_state.leaf_uploaded = True
+
 # Create tabs for different views
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     get_text("Harvest Summary"), 
@@ -263,7 +280,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     get_text("Timeline"), 
     get_text("Model Showcase"),
     get_text("AI Analysis"),
-    get_text("Chat")
+    get_text("Leaf Disease Analysis")
 ])
 
 # Tab 1: Harvest Summary
@@ -779,12 +796,7 @@ with tab6:
         analysis = st.session_state.analysis_cache[cache_key]
         
     # Display the analysis
-    if st.session_state.language == 'hindi':
-        with st.spinner(get_text("हिंदी में अनुवाद हो रहा है...")):
-            translated_analysis = gemini_integration.translate_to_hindi(analysis)
-            st.markdown(translated_analysis)
-    else:
-        st.markdown(analysis)
+    st.markdown(analysis)
         
     # Add data visualization of predicted market value
     st.subheader(get_text("Predicted Market Value Distribution"))
@@ -848,52 +860,126 @@ with tab6:
     
     st.altair_chart(line_chart, use_container_width=True)
 
-# New Tab 7: Context-aware Chatbot
-with tab7:
-    st.header(get_text("Chat with Harvest Assistant"))
-    
-    # Display chat history
-    for message in st.session_state.chat_history:
-        if message["role"] == "user":
-            st.chat_message("user").write(message["content"])
-        else:
-            st.chat_message("assistant").write(message["content"])
-    
-    # Chat input
-    user_question = st.chat_input(get_text("Ask a question..."))
-    
-    if user_question:
-        # Add user message to chat history
-        st.session_state.chat_history.append({"role": "user", "content": user_question})
-        st.chat_message("user").write(user_question)
-        
-        # Get response from Gemini
-        with st.chat_message("assistant"):
-            with st.spinner(get_text("Thinking...")):
-                response = gemini_integration.ask_question(
-                    user_question, 
-                    context_data={
-                        "session_info": {
-                            "session_id": selected_session,
-                            "timestamp": session_data.get("timestamp", ""),
-                            "total_apples": len(apple_images),
-                        },
-                        "condition_counts": category_counts,
-                        "quality_results": quality_results[:3]  # Just send a few examples for context
-                    },
-                    language=st.session_state.language
-                )
-                
-                # Add assistant response to chat history
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-                st.write(response)
-
 # Add refresh button
 if st.button(get_text("Refresh Data")):
     st.cache_data.clear()
     st.session_state.analysis_cache = {}
-    st.experimental_rerun()
+    st.rerun()
 
 # Add footer
 st.markdown("---")
-st.markdown("Apple Harvest Management System - Made with ❤️ for Farmers") 
+st.markdown("Apple Harvest Management System - Made with ❤️ for Farmers")
+
+# Add Leaf Disease Analysis Tab
+with tab7:
+    st.header(get_text("Apple Leaf Disease Analysis"))
+    
+    # Load the leaf disease predictor only once and cache it
+    if 'leaf_predictor' not in st.session_state:
+        st.session_state.leaf_predictor = leaf_disease_prediction.get_predictor()
+    
+    st.markdown("""
+    This tab allows you to analyze apple leaf images for diseases. The model can detect:
+    
+    - **Apple Cedar Rust**: A fungal disease causing yellow/orange spots on leaves
+    - **Apple Black Rot**: A fungal disease causing circular lesions on leaves
+    - **Apple Scab**: A fungal disease causing olive-green to brown spots on leaves 
+    - **Healthy**: Leaves with no visible signs of disease
+    """)
+    
+    # Upload an image (using on_change to process without rerunning)
+    uploaded_file = st.file_uploader(
+        get_text("Upload an apple leaf image"), 
+        type=["jpg", "jpeg", "png"],
+        key="leaf_upload_widget",
+        on_change=process_leaf_image
+    )
+    
+    # Only show results if an image has been uploaded and processed
+    if st.session_state.leaf_uploaded and st.session_state.leaf_image is not None:
+        # Create columns for layout
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader(get_text("Uploaded Image"))
+            st.image(st.session_state.leaf_image, use_column_width=True)
+        
+        with col2:
+            st.subheader(get_text("Disease Analysis Results"))
+            
+            # Get prediction from session state
+            prediction = st.session_state.leaf_prediction
+            
+            # Display the prediction
+            predicted_class = prediction.get("predicted_class", "unknown")
+            confidence = prediction.get("confidence", 0.0)
+            
+            # Color-coded result
+            if predicted_class == "Healthy":
+                st.success(f"🌿 **{get_text('Diagnosis')}:** {get_text('Healthy Leaf')} ({confidence:.2f})")
+            elif predicted_class == "unknown":
+                st.warning(f"⚠️ **{get_text('Diagnosis')}:** Unable to classify leaf")
+                if "error" in prediction:
+                    st.error(f"Error: {prediction['error']}")
+            else:
+                st.error(f"🔍 **{get_text('Diagnosis')}:** {get_text(predicted_class.replace('_', ' '))} ({confidence:.2f})")
+            
+            # Display class probabilities
+            st.subheader(get_text("Detailed Analysis"))
+            
+            # Format class names for display
+            display_names = {
+                "Apple_cedar_rust": get_text("Apple Cedar Rust"),
+                "Apple_black_rot": get_text("Apple Black Rot"),
+                "Apple_scab": get_text("Apple Scab"),
+                "Healthy": get_text("Healthy")
+            }
+            
+            # Show probabilities as progress bars
+            probs = prediction.get("class_probabilities", {})
+            for cls, prob in probs.items():
+                st.progress(prob, text=f"{display_names.get(cls, cls)}: {prob:.2f}")
+        
+        # Treatment recommendations
+        st.subheader(get_text("Treatment Recommendations"))
+        
+        if predicted_class == "Healthy":
+            st.success(get_text("This leaf appears healthy! Continue with your current care practices."))
+        elif predicted_class != "unknown":
+            with st.container(border=True):
+                if predicted_class == "Apple_cedar_rust":
+                    st.markdown("""
+                    ### Apple Cedar Rust Treatment
+                    
+                    1. **Remove infected leaves** and destroy them (do not compost)
+                    2. **Apply fungicide** specifically labeled for cedar apple rust
+                    3. **Remove cedar trees** (juniper species) within 1/2 mile if possible, as they are alternate hosts
+                    4. **Plant resistant varieties** in future plantings
+                    5. **Improve air circulation** through proper pruning
+                    """)
+                
+                elif predicted_class == "Apple_black_rot":
+                    st.markdown("""
+                    ### Black Rot Treatment
+                    
+                    1. **Prune out all diseased wood**, cutting at least 6 inches below visible infection
+                    2. **Remove all mummified fruits** from trees and ground
+                    3. **Apply fungicide** during early growing season
+                    4. **Manage insect damage**, as wounds serve as entry points for the fungus
+                    5. **Improve sanitation** by removing fallen leaves and fruit
+                    """)
+                
+                elif predicted_class == "Apple_scab":
+                    st.markdown("""
+                    ### Scab Treatment
+                    
+                    1. **Apply fungicide** early in the growing season
+                    2. **Rake and destroy fallen leaves** in autumn to reduce inoculum
+                    3. **Improve air circulation** through proper pruning
+                    4. **Use drip irrigation** instead of overhead watering to keep foliage dry
+                    5. **Consider resistant varieties** for future plantings
+                    """)
+    
+    else:
+        # Show placeholder when no image is uploaded
+        st.info(get_text("Please upload an apple leaf image for disease analysis")) 

@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore", category=FutureWarning, message=".*torch.cuda.
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "src/google_credentials.json"
 
 # Google Cloud Storage configuration
-BUCKET_NAME = "apple-detection-images"
+BUCKET_NAME = os.environ.get("BUCKET_NAME", "apple-454418-detection-images")
 session_id = datetime.now().strftime("%Y%m%d_%H%M%S")
 print(f"Starting new session: {session_id}")
 

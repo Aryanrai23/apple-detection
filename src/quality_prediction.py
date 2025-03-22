@@ -1,5 +1,6 @@
 import tensorflow as tf
 import numpy as np
+import os
 
 # Constants for apple quality prediction
 APPLE_CATEGORIES = ['Blotch_Apple', 'Normal_Apple', 'Rot_Apple', 'Scab_Apple']
@@ -9,7 +10,10 @@ CATEGORY_DESCRIPTIONS = {
     'Rot_Apple': 'Apples with rot showing soft, brown or black areas',
     'Scab_Apple': 'Apples with scab disease showing rough, corky spots'
 }
-MODEL_PATH = "src/models/apple_quality_model.h5"
+
+# Make the model path more robust by using absolute paths
+MODEL_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "apple_quality_model.h5")
+FALLBACK_MODEL_PATH = "/app/src/models/apple_quality_model.h5"  # Fallback for Docker container
 IMAGE_SIZE = (224, 224)  # Model input size
 
 class AppleQualityPredictor:
@@ -18,12 +22,31 @@ class AppleQualityPredictor:
     def __init__(self):
         """Initialize the apple quality predictor"""
         self.model = None
-        try:
-            self.model = tf.keras.models.load_model(MODEL_PATH)
-            print(f"Successfully loaded model from {MODEL_PATH}")
-        except Exception as e:
-            print(f"Error loading model: {str(e)}")
-            # Create a simple placeholder model if the main model isn't available
+        
+        # Try multiple paths for the model
+        model_paths = [
+            MODEL_PATH,
+            FALLBACK_MODEL_PATH,
+            "/app/src/models/apple_quality_model.h5",  # Absolute path in container
+            "src/models/apple_quality_model.h5",       # Relative path
+            "./src/models/apple_quality_model.h5"      # Another relative path
+        ]
+        
+        for path in model_paths:
+            try:
+                print(f"Attempting to load model from: {path}")
+                if os.path.exists(path):
+                    print(f"File exists at {path}")
+                    self.model = tf.keras.models.load_model(path)
+                    print(f"Successfully loaded model from {path}")
+                    break
+                else:
+                    print(f"File does not exist at {path}")
+            except Exception as e:
+                print(f"Error loading model from {path}: {str(e)}")
+        
+        if self.model is None:
+            print("All model loading attempts failed, creating placeholder model")
             self._create_placeholder_model()
     
     def _create_placeholder_model(self):

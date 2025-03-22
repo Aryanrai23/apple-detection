@@ -1,0 +1,50 @@
+{
+    "frame_counts": [
+        {
+            "frame": 1,
+            "apple_count": 1,
+            "timestamp": "2025-03-22T05:52:37.814123"
+        },
+        {
+            "frame": 2,
+            "apple_count": 1,
+            "timestamp": "2025-03-22T05:52:40.608178"
+        },
+        {
+            "frame": 3,
+            "apple_count": 0,
+            "timestamp": "2025-03-22T05:52:40.764031"
+        },
+        {
+            "frame": 4,
+            "apple_count": 0,
+            "timestamp": "2025-03-22T05:52:42.754340"
+        }
+    ],
+    "session_id": "20250322_055224",
+    "timestamp": "2025-03-22T05:52:28.559216",
+    "cloud_image_urls": [
+        {
+            "url": "gs://apple-454418-detection-images/20250322_055224/apple_0_845_311.jpg",
+            "confidence": 0.8381057381629944,
+            "coordinates": {
+                "x_min": 845,
+                "y_min": 311,
+                "x_max": 1327,
+                "y_max": 789
+            }
+        },
+        {
+            "url": "gs://apple-454418-detection-images/20250322_055224/apple_1_979_358.jpg",
+            "confidence": 0.6899446845054626,
+            "coordinates": {
+                "x_min": 979,
+                "y_min": 358,
+                "x_max": 1538,
+                "y_max": 910
+            }
+        }
+    ],
+    "session_start_frame": "gs://apple-454418-detection-images/20250322_055224/session_start.jpg",
+    "max_apples_detected": 1
+}
