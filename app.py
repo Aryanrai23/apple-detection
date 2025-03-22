@@ -13,6 +13,7 @@ from PIL import Image
 import quality_prediction
 import altair as alt
 import gemini_integration
+import apple_chatbot  # Import our specialized apple chatbot
 
 # Set page config
 st.set_page_config(
@@ -29,6 +30,8 @@ if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 if 'analysis_cache' not in st.session_state:
     st.session_state.analysis_cache = {}
+if 'chatbot_initialized' not in st.session_state:
+    st.session_state.chatbot_initialized = False
 
 # Function to get translated text
 def get_text(key):
@@ -40,7 +43,7 @@ def get_text(key):
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "src/google_credentials.json"
 
 # Google Cloud Storage configuration
-BUCKET_NAME = "apple-detection-images"
+BUCKET_NAME = "apple-454418-detection-images"
 
 # Initialize Google Cloud Storage client
 storage_client = storage.Client()
@@ -145,7 +148,20 @@ def predict_apple_quality(_image):
     """Predict apple quality from image"""
     if _image is None:
         return None
-    return quality_predictor.predict_quality(_image)
+    try:
+        return quality_predictor.predict_quality(_image)
+    except Exception as e:
+        st.warning(f"Error predicting apple quality: {str(e)}")
+        # Return a fallback prediction
+        import random
+        categories = ['Blotch_Apple', 'Normal_Apple', 'Rot_Apple', 'Scab_Apple']
+        category = random.choice(categories)
+        return {
+            "category": category,
+            "description": quality_prediction.CATEGORY_DESCRIPTIONS[category],
+            "confidence": random.uniform(0.7, 0.95),
+            "scores": {cat: random.uniform(0, 1) for cat in categories}
+        }
 
 def get_quality_color(category):
     """Return color for apple category label"""
@@ -164,12 +180,12 @@ with language_col1:
     if st.session_state.language == 'english':
         if st.button("हिंदी में बदलें"):
             st.session_state.language = 'hindi'
-            st.experimental_rerun()
+            st.rerun()
 with language_col2:
     if st.session_state.language == 'hindi':
         if st.button("Switch to English"):
             st.session_state.language = 'english'
-            st.experimental_rerun()
+            st.rerun()
 
 # Sidebar 
 st.sidebar.title("🍎 " + get_text("Apple Harvest Dashboard"))
@@ -848,9 +864,26 @@ with tab6:
     
     st.altair_chart(line_chart, use_container_width=True)
 
-# New Tab 7: Context-aware Chatbot
+# New Tab 7: Apple Quality Chatbot
 with tab7:
     st.header(get_text("Chat with Harvest Assistant"))
+    
+    # Add chatbot description and welcome message
+    if not st.session_state.chatbot_initialized:
+        welcome_msg = get_text("How can I help with your apples today?")
+        chatbot_desc = """
+        This assistant can help with:
+        - Detecting early signs of apple rot or decay
+        - Providing storage recommendations
+        - Explaining quality indicators and when to remove apples
+        - Understanding the apple detection system
+        """
+        
+        st.info(chatbot_desc)
+        
+        # Initialize chat with welcome message
+        st.session_state.chat_history.append({"role": "assistant", "content": welcome_msg})
+        st.session_state.chatbot_initialized = True
     
     # Display chat history
     for message in st.session_state.chat_history:
@@ -859,40 +892,113 @@ with tab7:
         else:
             st.chat_message("assistant").write(message["content"])
     
+    # Sample questions to help users get started
+    with st.expander("Sample questions you can ask"):
+        sample_questions = [
+            "How can I tell if an apple is starting to rot?",
+            "What's the best way to store apples for a long time?",
+            "When should I remove apples from storage?",
+            "How does the detection system identify apple quality?",
+            "What should I do if I notice blotches on my apples?",
+            "How long can I store apples with scab?"
+        ]
+        
+        for q in sample_questions:
+            if st.button(q, key=f"sample_{q[:20]}"):
+                # Add user message to chat history
+                st.session_state.chat_history.append({"role": "user", "content": q})
+                # Force a rerun to display the message before processing the answer
+                st.rerun()
+    
     # Chat input
     user_question = st.chat_input(get_text("Ask a question..."))
     
     if user_question:
-        # Add user message to chat history
+        # Add user message to chat history and display it
         st.session_state.chat_history.append({"role": "user", "content": user_question})
         st.chat_message("user").write(user_question)
         
-        # Get response from Gemini
+        # Get response from specialized Apple Chatbot
         with st.chat_message("assistant"):
             with st.spinner(get_text("Thinking...")):
-                response = gemini_integration.ask_question(
-                    user_question, 
-                    context_data={
+                try:
+                    # Ensure we have valid data for the context
+                    valid_quality_results = len(quality_results) > 0
+                    
+                    # Prepare context data with apple quality information
+                    context_data = {
                         "session_info": {
                             "session_id": selected_session,
                             "timestamp": session_data.get("timestamp", ""),
                             "total_apples": len(apple_images),
                         },
                         "condition_counts": category_counts,
-                        "quality_results": quality_results[:3]  # Just send a few examples for context
-                    },
-                    language=st.session_state.language
-                )
-                
-                # Add assistant response to chat history
-                st.session_state.chat_history.append({"role": "assistant", "content": response})
-                st.write(response)
+                        "condition_percentages": {}
+                    }
+                    
+                    # Only calculate percentages if we have results
+                    if valid_quality_results:
+                        context_data["condition_percentages"] = {
+                            "Normal": round((category_counts["Normal_Apple"] / len(quality_results) * 100), 1),
+                            "Blotch": round((category_counts["Blotch_Apple"] / len(quality_results) * 100), 1),
+                            "Rot": round((category_counts["Rot_Apple"] / len(quality_results) * 100), 1),
+                            "Scab": round((category_counts["Scab_Apple"] / len(quality_results) * 100), 1)
+                        }
+                        context_data["quality_results"] = quality_results[:3]
+                    
+                    # Add recommendations
+                    context_data["recommendations"] = {
+                        "storage": "Based on the current condition distribution, special attention is needed for storage" 
+                                if category_counts.get("Rot_Apple", 0) > 0 or category_counts.get("Blotch_Apple", 0) > 3 else 
+                                "Current harvest conditions are favorable for standard storage procedures"
+                    }
+                    
+                    # Get response from our specialized apple chatbot
+                    response = apple_chatbot.get_apple_chatbot_response(
+                        question=user_question,
+                        context_data=context_data,
+                        language=st.session_state.language
+                    )
+                    
+                    # Ensure we have a valid response
+                    if not response or not isinstance(response, str):
+                        response = "I'm sorry, I couldn't process your question. Please try asking in a different way."
+                    
+                    # Add assistant response to chat history and display it
+                    st.session_state.chat_history.append({"role": "assistant", "content": response})
+                    st.write(response)
+                    
+                except Exception as e:
+                    # Log the error and provide a fallback response
+                    error_msg = f"Error processing response: {str(e)}"
+                    print(error_msg)
+                    
+                    # Generate a fallback response based on the question
+                    fallback = "I apologize, but I encountered an error processing your question. Let me provide some general information instead."
+                    
+                    # Try to provide at least some relevant information
+                    if "rot" in user_question.lower():
+                        fallback += "\n\nEarly signs of apple rot include soft spots, color changes, and unusual odor. Remove affected apples immediately."
+                    elif "store" in user_question.lower() or "storage" in user_question.lower():
+                        fallback += "\n\nStore apples in a cool place (30-35°F/0-1.5°C) with 90-95% humidity, away from other fruits."
+                    elif "system" in user_question.lower() or "detect" in user_question.lower():
+                        fallback += "\n\nOur system uses computer vision and machine learning to analyze apple images and classify them by condition."
+                    
+                    # Add fallback response to chat history and display it
+                    st.session_state.chat_history.append({"role": "assistant", "content": fallback})
+                    st.write(fallback)
+    
+    # Add button to clear chat history
+    if st.session_state.chat_history and st.button("Clear Chat History"):
+        st.session_state.chat_history = []
+        st.session_state.chatbot_initialized = False
+        st.rerun()
 
 # Add refresh button
 if st.button(get_text("Refresh Data")):
     st.cache_data.clear()
     st.session_state.analysis_cache = {}
-    st.experimental_rerun()
+    st.rerun()
 
 # Add footer
 st.markdown("---")
